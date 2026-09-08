@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Basket Analysis — Upselling &amp; Cross-Selling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F6F1;
+    --panel:#FFFFFF;
+    --ink:#1C2321;
+    --muted:#5B6B60;
+    --primary:#2D6A4F;
+    --primary-dark:#1B4332;
+    --gold:#B8842A;
+    --gold-bg:#FBF1DD;
+    --teal:#2F855A;
+    --teal-bg:#E4F3E9;
+    --border:#DDE5DA;
+    --danger:#A6461F;
+    --danger-bg:#FBEAE1;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    display:flex;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    color:var(--primary-dark);
+    letter-spacing:-0.01em;
+  }
+  ::selection{ background:var(--teal-bg); }
+
+  /* ---------------- Sidebar ---------------- */
+  .sidebar{
+    width:250px;
+    flex-shrink:0;
+    background:var(--primary-dark);
+    color:#EAF3EE;
+    padding:28px 0;
+    position:sticky;
+    top:0;
+    height:100vh;
+    overflow-y:auto;
+    border-right:1px solid #12281f;
+  }
+  .brand{
+    padding:0 24px 22px 24px;
+    border-bottom:1px dashed #3a6153;
+    margin-bottom:14px;
+  }
+  .brand .mark{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:1.5rem;
+    color:#fff;
+    line-height:1.1;
+  }
+  .brand .tag{
+    font-size:0.78rem;
+    color:#9fc4b1;
+    margin-top:6px;
+  }
+  nav.navlist{ padding:6px 12px; }
+  nav.navlist button{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    text-align:left;
+    background:transparent;
+    border:none;
+    color:#cfe4d8;
+    font-family:'Inter',sans-serif;
+    font-size:0.92rem;
+    font-weight:500;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    margin-bottom:2px;
+    transition:background .15s ease, color .15s ease;
+  }
+  nav.navlist button .num{
+    font-family:'Fraunces',serif;
+    font-size:0.78rem;
+    color:#6f9c86;
+    width:16px;
+  }
+  nav.navlist button:hover{ background:#234938; color:#fff; }
+  nav.navlist button.active{ background:#EAF3EE; color:var(--primary-dark); font-weight:600; }
+  nav.navlist button.active .num{ color:var(--primary); }
+
+  .sidebar-foot{
+    padding:18px 24px 4px 24px;
+    margin-top:12px;
+    border-top:1px dashed #3a6153;
+  }
+  .sidebar-foot .lbl{ font-size:0.72rem; text-transform:uppercase; letter-spacing:.06em; color:#8fb6a2; margin-bottom:10px;}
+  .slider-row{ margin-bottom:16px; }
+  .slider-row label{ display:flex; justify-content:space-between; font-size:0.82rem; color:#cfe4d8; margin-bottom:6px;}
+  .slider-row label span.val{ font-family:'Fraunces',serif; color:#fff; }
+  input[type=range]{
+    width:100%; accent-color:#79c29e; cursor:pointer;
+  }
+  .hint{ font-size:0.74rem; color:#7fa393; margin-top:10px; line-height:1.4;}
+
+  /* ---------------- Main ---------------- */
+  main{
+    flex:1;
+    padding:40px 48px 80px 48px;
+    max-width:1180px;
+  }
+  .page{ display:none; }
+  .page.active{ display:block; animation:fadein .25s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .eyebrow{ color:var(--muted); font-size:0.85rem; margin:0 0 6px 0; }
+  h1.page-title{ font-size:2.1rem; margin:0 0 6px 0; }
+  p.page-sub{ color:var(--muted); max-width:640px; margin:0 0 28px 0; }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:22px 24px;
+    margin-bottom:22px;
+  }
+  .panel h3{ margin-top:0; font-size:1.1rem; }
+
+  .grid-metrics{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-bottom:26px;
+  }
+  .metric{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 18px;
+  }
+  .metric .m-label{ font-size:0.8rem; color:var(--muted); margin-bottom:6px; }
+  .metric .m-value{ font-family:'Fraunces',serif; font-size:1.9rem; color:var(--primary-dark); font-weight:600; }
+
+  table{ width:100%; border-collapse:collapse; font-size:0.86rem; }
+  thead th{
+    text-align:left; font-weight:600; color:var(--primary-dark);
+    border-bottom:2px solid var(--border); padding:8px 10px;
+    background:#F8FAF7; position:sticky; top:0;
+  }
+  tbody td{ padding:7px 10px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
+  tbody tr:hover{ background:#F7FAF8; }
+  .table-scroll{ max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:8px; }
+
+  .btn{
+    display:inline-block; background:var(--primary); color:#fff; border:none;
+    padding:9px 16px; border-radius:7px; font-size:0.85rem; font-weight:600;
+    cursor:pointer; text-decoration:none; font-family:'Inter',sans-serif;
+  }
+  .btn:hover{ background:var(--primary-dark); }
+  .btn.secondary{ background:transparent; color:var(--primary); border:1px solid var(--primary); }
+  .btn.secondary:hover{ background:var(--teal-bg); }
+
+  .tabs{ display:flex; gap:6px; margin-bottom:14px; }
+  .tabs button{
+    padding:7px 14px; border-radius:7px; border:1px solid var(--border);
+    background:#fff; cursor:pointer; font-size:0.84rem; font-family:'Inter',sans-serif;
+  }
+  .tabs button.active{ background:var(--primary-dark); color:#fff; border-color:var(--primary-dark); }
+
+  select, .select{
+    width:100%; padding:10px 12px; border-radius:7px; border:1px solid var(--border);
+    font-size:0.92rem; font-family:'Inter',sans-serif; background:#fff; color:var(--ink);
+  }
+
+  .badge{
+    display:inline-block; font-size:0.72rem; font-weight:700; padding:3px 10px;
+    border-radius:20px; letter-spacing:.02em;
+  }
+  .badge.cross{ background:var(--teal-bg); color:var(--teal); }
+  .badge.up{ background:var(--gold-bg); color:var(--gold); }
+
+  .rec-card{
+    border:1px solid var(--border); border-left:4px solid var(--teal);
+    border-radius:8px; padding:14px 16px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .rec-card.up{ border-left-color:var(--gold); }
+  .rec-card .rec-name{ font-family:'Fraunces',serif; font-size:1.05rem; color:var(--primary-dark); }
+  .rec-card .rec-stats{ font-size:0.82rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .callout{
+    border-radius:8px; padding:14px 16px; font-size:0.88rem; margin-bottom:18px;
+  }
+  .callout.info{ background:#EEF3FB; color:#2B4C7E; border:1px solid #D3E0F3; }
+  .callout.warn{ background:var(--gold-bg); color:#7a5817; border:1px solid #efd9a8; }
+  .callout.error{ background:var(--danger-bg); color:var(--danger); border:1px solid #f0c9b8; }
+  .callout.ok{ background:var(--teal-bg); color:var(--teal); border:1px solid #c7e6d3; }
+
+  .chart-wrap{ position:relative; height:360px; }
+  .chart-wrap.tall{ height:440px; }
+  .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:900px){ .two-col{ grid-template-columns:1fr; } .grid-metrics{ grid-template-columns:1fr 1fr; } }
+
+  .rule-line{ font-size:0.92rem; margin-bottom:8px; padding:10px 14px; background:#F8FAF7; border-left:3px solid var(--primary); border-radius:6px;}
+  .kv{ display:flex; gap:22px; flex-wrap:wrap; font-size:0.82rem; color:var(--muted); margin-top:20px;}
+  .kv b{ color:var(--ink); }
+
+  code, .mono{ font-variant-numeric:tabular-nums; }
+  .footer-note{ color:var(--muted); font-size:0.78rem; margin-top:40px; border-top:1px solid var(--border); padding-top:16px; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="mark">Basket&amp;Bundle</div>
+    <div class="tag">Market Basket Analysis for Upselling &amp; Cross-Selling</div>
+  </div>
+  <nav class="navlist" id="nav">
+    <button data-page="home" class="active"><span class="num">01</span>Home</button>
+    <button data-page="dataset"><span class="num">02</span>Dataset</button>
+    <button data-page="analysis"><span class="num">03</span>Data Analysis</button>
+    <button data-page="itemsets"><span class="num">04</span>Frequent Itemsets</button>
+    <button data-page="rules"><span class="num">05</span>Association Rules</button>
+    <button data-page="recs"><span class="num">06</span>Product Recommendations</button>
+    <button data-page="viz"><span class="num">07</span>Visualizations</button>
+    <button data-page="about"><span class="num">08</span>About Project</button>
+  </nav>
+  <div class="sidebar-foot">
+    <div class="lbl">Apriori Parameters</div>
+    <div class="slider-row">
+      <label>Minimum Support <span class="val" id="supVal">0.02</span></label>
+      <input type="range" id="supSlider" min="0.01" max="0.20" step="0.005" value="0.02">
+    </div>
+    <div class="slider-row">
+      <label>Minimum Confidence <span class="val" id="confVal">0.20</span></label>
+      <input type="range" id="confSlider" min="0.05" max="0.90" step="0.05" value="0.20">
+    </div>
+    <div class="slider-row">
+      <label>Minimum Lift <span class="val" id="liftVal">1.0</span></label>
+      <input type="range" id="liftSlider" min="1.0" max="5.0" step="0.1" value="1.0">
+    </div>
+    <div class="hint">Lower support/confidence surfaces more rules; higher values keep only the strongest patterns.</div>
+  </div>
+</aside>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section class="page active" id="page-home">
+    <p class="eyebrow">Dashboard</p>
+    <h1 class="page-title">Market Basket Analysis for Upselling and Cross-Selling</h1>
+    <p class="page-sub">This app mines a supermarket transaction log for products that are bought together, then turns those patterns into cross-sell and upsell recommendations — built for a live classroom or committee demo.</p>
+
+    <div class="grid-metrics">
+      <div class="metric"><div class="m-label">Total Transactions</div><div class="m-value" id="m-txn">–</div></div>
+      <div class="metric"><div class="m-label">Total Products</div><div class="m-value" id="m-prod">–</div></div>
+      <div class="metric"><div class="m-label">Total Customers</div><div class="m-value" id="m-cust">–</div></div>
+      <div class="metric"><div class="m-label">Association Rules Found</div><div class="m-value" id="m-rules">–</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Most Frequently Purchased Products</h3>
+      <div class="chart-wrap"><canvas id="chart-home-top"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>Top Recommendations Preview</h3>
+      <div id="home-preview"></div>
+    </div>
+
+    <div class="panel">
+      <h3>How this app works</h3>
+      <div class="rule-line"><b>Dataset</b> — view the raw and cleaned transaction log, and download either as CSV.</div>
+      <div class="rule-line"><b>Data Analysis</b> — see the cleaning steps applied and basic statistics.</div>
+      <div class="rule-line"><b>Frequent Itemsets</b> — product combinations that appear together often enough to matter.</div>
+      <div class="rule-line"><b>Association Rules</b> — "if A then B" rules with Support, Confidence and Lift.</div>
+      <div class="rule-line"><b>Product Recommendations</b> — pick a product, get instant cross-sell/upsell suggestions.</div>
+      <div class="rule-line"><b>Visualizations</b> — five charts summarizing the whole analysis.</div>
+    </div>
+  </section>
+
+  <!-- ============ DATASET ============ -->
+  <section class="page" id="page-dataset">
+    <p class="eyebrow">Data</p>
+    <h1 class="page-title">Transaction Dataset</h1>
+    <p class="page-sub">A synthetic supermarket transaction log, generated with realistic co-purchase behaviour (Bread pulls in Butter, Diapers pull in Beer, and so on) so the algorithm has genuine patterns to discover.</p>
+
+    <div class="tabs">
+      <button data-tab="raw" class="active">Raw Data</button>
+      <button data-tab="clean">Cleaned Data</button>
+      <button data-tab="cols">Column Guide</button>
+    </div>
+
+    <div class="panel" id="tab-raw">
+      <div class="kv"><span id="raw-shape"></span></div>
+      <div class="table-scroll" style="margin-top:14px;"><table id="raw-table"></table></div>
+      <div style="margin-top:14px;"><button class="btn secondary" id="dl-raw">Download raw dataset (CSV)</button></div>
+    </div>
+    <div class="panel" id="tab-clean" style="display:none;">
+      <div class="kv"><span id="clean-shape"></span></div>
+      <div class="table-scroll" style="margin-top:14px;"><table id="clean-table"></table></div>
+      <div style="margin-top:14px;"><button class="btn secondary" id="dl-clean">Download cleaned dataset (CSV)</button></div>
+    </div>
+    <div class="panel" id="tab-cols" style="display:none;">
+      <table>
+        <thead><tr><th>Column</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>TransactionID</td><td>Unique ID for each shopping basket / order</td></tr>
+          <tr><td>CustomerID</td><td>Unique ID for each customer</td></tr>
+          <tr><td>Product</td><td>Name of the purchased product</td></tr>
+          <tr><td>Quantity</td><td>Number of units purchased</td></tr>
+          <tr><td>Price</td><td>Unit price of the product (INR)</td></tr>
+          <tr><td>Date</td><td>Date of purchase</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ DATA ANALYSIS ============ -->
+  <section class="page" id="page-analysis">
+    <p class="eyebrow">Preprocessing</p>
+    <h1 class="page-title">Data Preprocessing &amp; Analysis</h1>
+    <p class="page-sub">Missing values and invalid transactions (zero/negative quantity or price, blank products) are removed before any analysis runs.</p>
+
+    <div class="grid-metrics">
+      <div class="metric"><div class="m-label">Original Rows</div><div class="m-value" id="rep-orig">–</div></div>
+      <div class="metric"><div class="m-label">Removed (Missing Values)</div><div class="m-value" id="rep-missing">–</div></div>
+      <div class="metric"><div class="m-label">Removed (Invalid Qty/Price)</div><div class="m-value" id="rep-invalid">–</div></div>
+      <div class="metric"><div class="m-label">Final Clean Rows</div><div class="m-value" id="rep-final">–</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3>Numeric summary</h3>
+        <table id="numeric-summary"></table>
+      </div>
+      <div class="panel">
+        <h3>Basket size (products per transaction)</h3>
+        <table id="basket-summary"></table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Product frequency table</h3>
+      <div class="table-scroll"><table id="freq-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ FREQUENT ITEMSETS ============ -->
+  <section class="page" id="page-itemsets">
+    <p class="eyebrow">Apriori Algorithm</p>
+    <h1 class="page-title">Frequent Itemsets</h1>
+    <p class="page-sub" id="itemsets-sub">Itemsets that appear together often enough to clear the current support threshold.</p>
+    <div class="panel">
+      <div id="itemsets-msg"></div>
+      <div class="table-scroll"><table id="itemsets-table"></table></div>
+      <div class="kv"><span id="itemsets-count"></span></div>
+    </div>
+  </section>
+
+  <!-- ============ ASSOCIATION RULES ============ -->
+  <section class="page" id="page-rules">
+    <p class="eyebrow">Rule Mining</p>
+    <h1 class="page-title">Association Rules</h1>
+    <p class="page-sub">Each rule reads as: if a customer buys the antecedent, they are also likely to buy the consequent.</p>
+    <div class="panel">
+      <div id="rules-msg"></div>
+      <div class="table-scroll"><table id="rules-table"></table></div>
+      <div style="margin-top:14px;"><button class="btn secondary" id="dl-rules">Download all rules (CSV)</button></div>
+    </div>
+    <div class="panel">
+      <h3>Example rules in plain English</h3>
+      <div id="rules-plain"></div>
+    </div>
+  </section>
+
+  <!-- ============ RECOMMENDATIONS ============ -->
+  <section class="page" id="page-recs">
+    <p class="eyebrow">Recommendation Engine</p>
+    <h1 class="page-title">Product Recommendations</h1>
+    <p class="page-sub">Choose a product to see what customers who buy it are also likely to buy — labelled Cross-sell (a complementary item) or Upsell (a higher-value item).</p>
+
+    <div class="panel">
+      <label for="product-select" style="font-size:0.85rem; color:var(--muted); display:block; margin-bottom:8px;">Choose a product</label>
+      <select id="product-select"></select>
+    </div>
+
+    <div id="recs-msg"></div>
+    <div class="panel" id="recs-panel" style="display:none;">
+      <h3>Recommendations</h3>
+      <div id="recs-cards"></div>
+      <div class="table-scroll" style="margin-top:16px;"><table id="recs-table"></table></div>
+    </div>
+    <div class="panel" id="recs-chart-panel" style="display:none;">
+      <h3 id="recs-chart-title">Recommendation strength (lift)</h3>
+      <div class="chart-wrap"><canvas id="chart-recs"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============ VISUALIZATIONS ============ -->
+  <section class="page" id="page-viz">
+    <p class="eyebrow">Charts</p>
+    <h1 class="page-title">Visual Analysis</h1>
+
+    <div class="panel">
+      <h3>1. Top-selling products</h3>
+      <div class="chart-wrap"><canvas id="chart-top-selling"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>2. Product purchase frequency (share of transactions)</h3>
+      <div class="chart-wrap"><canvas id="chart-freq-pie"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>3. Support vs confidence (association rules)</h3>
+      <div id="viz-rules-msg"></div>
+      <div class="chart-wrap"><canvas id="chart-support-conf"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>4. Association rules — top rules by lift</h3>
+      <div class="chart-wrap tall"><canvas id="chart-top-rules"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>5. Sample recommendation chart</h3>
+      <div id="viz-sample-msg"></div>
+      <div class="chart-wrap"><canvas id="chart-sample-rec"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============ ABOUT ============ -->
+  <section class="page" id="page-about">
+    <p class="eyebrow">Project Notes</p>
+    <h1 class="page-title">About This Project</h1>
+
+    <div class="panel">
+      <h3>Objective</h3>
+      <p>Analyze customer shopping transaction data, discover which products are frequently purchased together using the Apriori algorithm, and generate actionable cross-selling and upselling product recommendations for a retail or e-commerce business.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Technology stack</h3>
+      <p>This build runs entirely in the browser: a hand-written JavaScript port of the Apriori algorithm and association-rule mining, styled as a self-contained web app with Chart.js visualizations. A parallel Python edition (Pandas, NumPy, MLxtend, Streamlit, Plotly) is available for a server-hosted version of the same analysis.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Key concepts</h3>
+      <div class="rule-line"><b>Support</b> — how frequently an itemset appears across all transactions.</div>
+      <div class="rule-line"><b>Confidence</b> — likelihood the consequent is purchased given the antecedent was purchased.</div>
+      <div class="rule-line"><b>Lift</b> — how much more likely the consequent is bought with the antecedent than by chance alone (lift &gt; 1 marks a genuine positive association).</div>
+    </div>
+
+    <div class="panel">
+      <h3>Business use case</h3>
+      <div class="rule-line"><b>Cross-selling</b> — recommending complementary products, e.g. Bread → Butter.</div>
+      <div class="rule-line"><b>Upselling</b> — recommending a higher-value add-on or upgrade, e.g. Milk → Cheese.</div>
+    </div>
+
+    <p class="footer-note">Use the sliders in the sidebar to change the Support, Confidence and Lift thresholds live, and watch the itemsets, rules and recommendations update everywhere in the app.</p>
+  </section>
+
+</main>
+
+<script>
+/* ============================================================
+   Embedded engine (identical logic to the Python reference
+   implementation): dataset generation, cleaning, Apriori,
+   association rules, and recommendation scoring.
+   ============================================================ */
+/* ============================================================
+   core.js — Market Basket Analysis engine (pure JS, no deps)
+   Ported from the Python reference implementation:
+     - seeded synthetic dataset generator (reproducible)
+     - preprocessing / cleaning
+     - basket construction
+     - Apriori frequent-itemset mining
+     - association rule generation (support, confidence, lift)
+     - cross-sell / upsell recommendation logic
+   ============================================================ */
+
+// ---------- Seeded PRNG (mulberry32) so the dataset is reproducible ----------
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const PRODUCT_CATALOG = {
+  Bread: 40, Butter: 55, Milk: 30, Cheese: 90, Eggs: 60,
+  Cereal: 150, Yogurt: 45, Jam: 80, Coffee: 200, Tea: 120,
+  Sugar: 45, Rice: 70, Pasta: 90, "Tomato Sauce": 60, "Cooking Oil": 180,
+  Onion: 30, Potato: 25, Tomato: 35, Apple: 100, Banana: 40,
+  Chicken: 220, Fish: 250, Diaper: 350, "Baby Wipes": 150, Beer: 180,
+  Chips: 50, Chocolate: 70, Biscuits: 35, "Soft Drink": 60, Juice: 90,
+  Detergent: 160, Soap: 40, Shampoo: 190, Toothpaste: 85, "Toilet Paper": 120,
+  Notebook: 30, Pen: 10, Umbrella: 300, Candles: 50, Batteries: 90,
+};
+const ALL_PRODUCTS = Object.keys(PRODUCT_CATALOG);
+
+const CO_PURCHASE_MAP = {
+  Bread: ["Butter", "Jam", "Eggs", "Milk"],
+  Butter: ["Bread", "Jam"],
+  Milk: ["Cereal", "Bread", "Sugar", "Coffee"],
+  Cereal: ["Milk", "Sugar"],
+  Coffee: ["Sugar", "Milk", "Biscuits"],
+  Tea: ["Sugar", "Biscuits", "Milk"],
+  Pasta: ["Tomato Sauce", "Cheese"],
+  "Tomato Sauce": ["Pasta", "Cheese"],
+  Chicken: ["Cooking Oil", "Onion", "Rice"],
+  Fish: ["Onion", "Cooking Oil", "Tomato"],
+  Diaper: ["Baby Wipes", "Beer"],
+  "Baby Wipes": ["Diaper"],
+  Chips: ["Soft Drink", "Chocolate"],
+  "Soft Drink": ["Chips"],
+  Detergent: ["Soap", "Toilet Paper"],
+  Shampoo: ["Soap", "Toothpaste"],
+  Rice: ["Chicken", "Onion"],
+  Onion: ["Potato", "Tomato"],
+  Potato: ["Onion", "Tomato"],
+  Notebook: ["Pen"],
+  Beer: ["Chips", "Diaper"],
+};
+
+const NUM_TRANSACTIONS = 1200;
+const NUM_CUSTOMERS = 250;
+
+function sample(rng, arr, n) {
+  const copy = arr.slice();
+  const out = [];
+  n = Math.min(n, copy.length);
+  for (let i = 0; i < n; i++) {
+    const idx = Math.floor(rng() * copy.length);
+    out.push(copy[idx]);
+    copy.splice(idx, 1);
+  }
+  return out;
+}
+function choice(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function randint(rng, a, b) { return a + Math.floor(rng() * (b - a + 1)); }
+
+function buildBasket(rng) {
+  const size = randint(rng, 2, 6);
+  const seed = choice(rng, ALL_PRODUCTS);
+  const basket = new Set([seed]);
+  if (CO_PURCHASE_MAP[seed] && rng() < 0.7) {
+    const partners = CO_PURCHASE_MAP[seed];
+    const nP = Math.min(partners.length, randint(rng, 1, 3));
+    sample(rng, partners, nP).forEach((p) => basket.add(p));
+  }
+  while (basket.size < size) basket.add(choice(rng, ALL_PRODUCTS));
+  return Array.from(basket);
+}
+
+/** Generates the synthetic transaction dataset (array of row objects). */
+function generateDataset(seed = 42) {
+  const rng = mulberry32(seed);
+  const rows = [];
+  let txnId = 1000;
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 90);
+
+  for (let i = 0; i < NUM_TRANSACTIONS; i++) {
+    txnId += 1;
+    const customerId = "CUST" + String(randint(rng, 1, NUM_CUSTOMERS)).padStart(4, "0");
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + randint(rng, 0, 90));
+    const dateStr = d.toISOString().slice(0, 10);
+    const basket = buildBasket(rng);
+    basket.forEach((product) => {
+      const qty = randint(rng, 1, 5);
+      const base = PRODUCT_CATALOG[product];
+      const price = Math.round(base * (0.9 + rng() * 0.2) * 100) / 100;
+      rows.push({
+        TransactionID: "TXN" + txnId,
+        CustomerID: customerId,
+        Product: product,
+        Quantity: qty,
+        Price: price,
+        Date: dateStr,
+      });
+    });
+  }
+
+  // Inject a handful of intentionally dirty rows so the cleaning step has
+  // something real to demonstrate (mirrors the Python reference dataset).
+  const dirtyIdx = [];
+  for (let i = 0; i < 15; i++) dirtyIdx.push(Math.floor(rng() * rows.length));
+  dirtyIdx.forEach((idx, i) => {
+    const r = Object.assign({}, rows[idx]);
+    r.TransactionID = r.TransactionID + "_DIRTY" + i;
+    if (i < 5) r.Quantity = 0;
+    else if (i < 10) r.Price = null;
+    else r.Product = null;
+    rows.push(r);
+  });
+
+  return rows;
+}
+
+/** Cleans raw rows: drop missing values + invalid qty/price. Returns {clean, report}. */
+function preprocess(rawRows) {
+  const report = { original_rows: rawRows.length };
+  let missingRemoved = 0;
+  let step1 = rawRows.filter((r) => {
+    const ok = r.TransactionID && r.CustomerID && r.Product && r.Quantity != null && r.Price != null && r.Date;
+    if (!ok) missingRemoved++;
+    return ok;
+  });
+  report.missing_removed = missingRemoved;
+
+  let invalidRemoved = 0;
+  const clean = step1.filter((r) => {
+    const ok = Number(r.Quantity) > 0 && Number(r.Price) > 0 && String(r.Product).trim() !== "";
+    if (!ok) invalidRemoved++;
+    return ok;
+  }).map((r) => ({
+    TransactionID: String(r.TransactionID).trim(),
+    CustomerID: String(r.CustomerID).trim(),
+    Product: String(r.Product).trim(),
+    Quantity: Number(r.Quantity),
+    Price: Number(r.Price),
+    Date: r.Date,
+  }));
+  report.invalid_removed = invalidRemoved;
+  report.final_rows = clean.length;
+  return { clean, report };
+}
+
+/** Builds a Map<TransactionID, Set<Product>> "basket" structure. */
+function buildBasketMap(cleanRows) {
+  const map = new Map();
+  cleanRows.forEach((r) => {
+    if (!map.has(r.TransactionID)) map.set(r.TransactionID, new Set());
+    map.get(r.TransactionID).add(r.Product);
+  });
+  return map;
+}
+
+// ---------- Apriori (frequent itemsets up to size 3, for browser performance) ----------
+function itemsetKey(items) { return Array.from(items).sort().join(" | "); }
+
+function apriori(basketMap, minSupport, maxLen = 3) {
+  const n = basketMap.size;
+  const baskets = Array.from(basketMap.values());
+
+  // L1: single-item support counts
+  const counts1 = new Map();
+  baskets.forEach((b) => b.forEach((p) => counts1.set(p, (counts1.get(p) || 0) + 1)));
+  let currentLevel = [];
+  const frequent = []; // {items:[...], support}
+  counts1.forEach((cnt, item) => {
+    const support = cnt / n;
+    if (support >= minSupport) {
+      currentLevel.push([item]);
+      frequent.push({ items: [item], support });
+    }
+  });
+
+  let k = 2;
+  while (currentLevel.length > 0 && k <= maxLen) {
+    // Generate candidates by joining (k-1)-itemsets that share k-2 items
+    const candidatesSet = new Set();
+    const candidates = [];
+    for (let i = 0; i < currentLevel.length; i++) {
+      for (let j = i + 1; j < currentLevel.length; j++) {
+        const a = currentLevel[i], b = currentLevel[j];
+        const union = Array.from(new Set([...a, ...b])).sort();
+        if (union.length === k) {
+          const key = union.join(" | ");
+          if (!candidatesSet.has(key)) {
+            candidatesSet.add(key);
+            candidates.push(union);
+          }
+        }
+      }
+    }
+    // Count support for candidates
+    const nextLevel = [];
+    candidates.forEach((cand) => {
+      let cnt = 0;
+      for (const b of baskets) {
+        if (cand.every((it) => b.has(it))) cnt++;
+      }
+      const support = cnt / n;
+      if (support >= minSupport) {
+        nextLevel.push(cand);
+        frequent.push({ items: cand, support });
+      }
+    });
+    currentLevel = nextLevel;
+    k++;
+  }
+
+  frequent.sort((a, b) => b.support - a.support);
+  return frequent;
+}
+
+// All non-empty proper subsets of an array (used to build antecedent/consequent splits)
+function properSubsets(arr) {
+  const subsets = [];
+  const n = arr.length;
+  for (let mask = 1; mask < (1 << n) - 1; mask++) {
+    const subset = [];
+    for (let i = 0; i < n; i++) if (mask & (1 << i)) subset.push(arr[i]);
+    subsets.push(subset);
+  }
+  return subsets;
+}
+
+/** Generates association rules from frequent itemsets. */
+function generateRules(frequentItemsets, basketMap, minConfidence, minLift) {
+  const n = basketMap.size;
+  const supportOf = new Map();
+  frequentItemsets.forEach((fi) => supportOf.set(itemsetKey(fi.items), fi.support));
+
+  const rules = [];
+  frequentItemsets.forEach((fi) => {
+    if (fi.items.length < 2) return;
+    const subsets = properSubsets(fi.items);
+    subsets.forEach((antecedent) => {
+      const consequent = fi.items.filter((it) => !antecedent.includes(it));
+      const suppAB = fi.support;
+      const suppA = supportOf.get(itemsetKey(antecedent));
+      const suppB = supportOf.get(itemsetKey(consequent));
+      if (suppA == null || suppB == null) return;
+      const confidence = suppAB / suppA;
+      const lift = confidence / suppB;
+      if (confidence >= minConfidence && lift >= minLift) {
+        rules.push({
+          antecedents: antecedent.slice().sort(),
+          consequents: consequent.slice().sort(),
+          support: suppAB,
+          confidence,
+          lift,
+        });
+      }
+    });
+  });
+
+  rules.sort((a, b) => b.lift - a.lift || b.confidence - a.confidence);
+  return rules;
+}
+
+/** Cross-sell / Upsell recommendation for a chosen product. */
+function getRecommendations(rules, product, priceLookup, topN = 10) {
+  const matches = rules.filter((r) => r.antecedents.includes(product));
+  const seen = new Set();
+  const basePrice = priceLookup[product] || 0;
+  const out = [];
+  matches
+    .slice()
+    .sort((a, b) => b.lift - a.lift || b.confidence - a.confidence)
+    .forEach((r) => {
+      r.consequents.forEach((item) => {
+        if (item === product || seen.has(item)) return;
+        seen.add(item);
+        const recPrice = priceLookup[item] || 0;
+        const type = recPrice > basePrice * 1.15 ? "Upsell" : "Cross-sell";
+        out.push({
+          product: item,
+          support: r.support,
+          confidence: r.confidence,
+          lift: r.lift,
+          type,
+          price: recPrice,
+        });
+      });
+    });
+  out.sort((a, b) => b.lift - a.lift);
+  return out.slice(0, topN);
+}
+
+
+/* ============================================================
+   app.js — UI glue code: renders every page and chart, and
+   recomputes itemsets/rules whenever the sidebar sliders move.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  // ---------- Generate + clean data once ----------
+  const rawRows = generateDataset(42);
+  const { clean: cleanRows, report } = preprocess(rawRows);
+  const basketMap = buildBasketMap(cleanRows);
+  const priceLookup = {};
+  cleanRows.forEach((r) => { priceLookup[r.Product] = Math.round(
+    ((priceLookup[r.Product] ? priceLookup[r.Product] * priceLookup["_n_" + r.Product] : 0) + r.Price) /
+    ((priceLookup["_n_" + r.Product] || 0) + 1) * 100) / 100;
+    priceLookup["_n_" + r.Product] = (priceLookup["_n_" + r.Product] || 0) + 1;
+  });
+  // clean helper counters out of the lookup object
+  Object.keys(priceLookup).forEach((k) => { if (k.startsWith("_n_")) delete priceLookup[k]; });
+
+  const productPopularity = {}; // product -> # distinct transactions
+  cleanRows.forEach((r) => {
+    productPopularity[r.Product] = productPopularity[r.Product] || new Set();
+    productPopularity[r.Product].add(r.TransactionID);
+  });
+  const popularityList = Object.keys(productPopularity)
+    .map((p) => ({ product: p, count: productPopularity[p].size }))
+    .sort((a, b) => b.count - a.count);
+
+  const qtyByProduct = {};
+  cleanRows.forEach((r) => { qtyByProduct[r.Product] = (qtyByProduct[r.Product] || 0) + r.Quantity; });
+
+  let frequentItemsets = [];
+  let rules = [];
+  const charts = {}; // keep Chart.js instances so we can destroy/redraw on recompute
+
+  // ---------- State: current thresholds ----------
+  let minSupport = 0.02, minConfidence = 0.20, minLift = 1.0;
+
+  function recompute() {
+    frequentItemsets = apriori(basketMap, minSupport, 3);
+    rules = generateRules(frequentItemsets, basketMap, minConfidence, minLift);
+    renderAll();
+  }
+
+  // ---------- Formatting helpers ----------
+  const fmt3 = (x) => x.toFixed(3);
+  const fmt2 = (x) => x.toFixed(2);
+  const money = (x) => "₹" + Number(x).toFixed(2);
+
+  function tableHTML(headers, rows) {
+    let html = "<thead><tr>" + headers.map((h) => `<th>${h}</th>`).join("") + "</tr></thead><tbody>";
+    rows.forEach((row) => {
+      html += "<tr>" + row.map((c) => `<td>${c}</td>`).join("") + "</tr>";
+    });
+    html += "</tbody>";
+    return html;
+  }
+
+  function csvDownload(filename, headers, rows) {
+    const escape = (v) => {
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.map(escape).join(",")].concat(rows.map((r) => r.map(escape).join(",")));
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ============================================================
+  // NAVIGATION
+  // ============================================================
+  document.getElementById("nav").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-page]");
+    if (!btn) return;
+    document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+    document.getElementById("page-" + btn.dataset.page).classList.add("active");
+  });
+
+  document.querySelectorAll(".tabs").forEach((tabsEl) => {
+    tabsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (!btn) return;
+      tabsEl.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const panel = tabsEl.parentElement;
+      panel.querySelectorAll('[id^="tab-"]').forEach((p) => (p.style.display = "none"));
+      document.getElementById("tab-" + btn.dataset.tab).style.display = "block";
+    });
+  });
+
+  // ============================================================
+  // SLIDERS
+  // ============================================================
+  const supSlider = document.getElementById("supSlider");
+  const confSlider = document.getElementById("confSlider");
+  const liftSlider = document.getElementById("liftSlider");
+  const supVal = document.getElementById("supVal");
+  const confVal = document.getElementById("confVal");
+  const liftVal = document.getElementById("liftVal");
+
+  let debounceTimer = null;
+  function onSliderChange() {
+    minSupport = parseFloat(supSlider.value);
+    minConfidence = parseFloat(confSlider.value);
+    minLift = parseFloat(liftSlider.value);
+    supVal.textContent = minSupport.toFixed(3);
+    confVal.textContent = minConfidence.toFixed(2);
+    liftVal.textContent = minLift.toFixed(1);
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(recompute, 180);
+  }
+  [supSlider, confSlider, liftSlider].forEach((s) => s.addEventListener("input", onSliderChange));
+
+  // ============================================================
+  // RENDER: DATASET PAGE
+  // ============================================================
+  function renderDatasetPage() {
+    document.getElementById("raw-shape").innerHTML = `<b>${rawRows.length}</b> rows × 6 columns`;
+    document.getElementById("clean-shape").innerHTML = `<b>${cleanRows.length}</b> rows × 6 columns`;
+
+    const headers = ["TransactionID", "CustomerID", "Product", "Quantity", "Price", "Date"];
+    const rawRowsToShow = rawRows.slice(0, 200).map((r) => headers.map((h) => (r[h] == null ? "<i>—</i>" : r[h])));
+    document.getElementById("raw-table").innerHTML = tableHTML(headers, rawRowsToShow);
+
+    const cleanRowsToShow = cleanRows.slice(0, 200).map((r) => headers.map((h) => r[h]));
+    document.getElementById("clean-table").innerHTML = tableHTML(headers, cleanRowsToShow);
+
+    document.getElementById("dl-raw").onclick = () =>
+      csvDownload("transactions_raw.csv", headers, rawRows.map((r) => headers.map((h) => (r[h] == null ? "" : r[h]))));
+    document.getElementById("dl-clean").onclick = () =>
+      csvDownload("transactions_clean.csv", headers, cleanRows.map((r) => headers.map((h) => r[h])));
+  }
+
+  // ============================================================
+  // RENDER: DATA ANALYSIS PAGE
+  // ============================================================
+  function mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
+  function std(arr) { const m = mean(arr); return Math.sqrt(mean(arr.map((x) => (x - m) ** 2))); }
+  function quantile(sorted, q) {
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos), rest = pos - base;
+    return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+  }
+  function describe(arr) {
+    const sorted = arr.slice().sort((a, b) => a - b);
+    return {
+      count: arr.length, mean: mean(arr), std: std(arr), min: sorted[0],
+      "25%": quantile(sorted, 0.25), "50%": quantile(sorted, 0.5), "75%": quantile(sorted, 0.75), max: sorted[sorted.length - 1],
+    };
+  }
+
+  function renderAnalysisPage() {
+    document.getElementById("rep-orig").textContent = report.original_rows;
+    document.getElementById("rep-missing").textContent = report.missing_removed;
+    document.getElementById("rep-invalid").textContent = report.invalid_removed;
+    document.getElementById("rep-final").textContent = report.final_rows;
+
+    const qtyDesc = describe(cleanRows.map((r) => r.Quantity));
+    const priceDesc = describe(cleanRows.map((r) => r.Price));
+    document.getElementById("numeric-summary").innerHTML = tableHTML(
+      ["Statistic", "Quantity", "Price"],
+      Object.keys(qtyDesc).map((k) => [k, fmt2(qtyDesc[k]), fmt2(priceDesc[k])])
+    );
+
+    const basketSizeMap = new Map();
+    cleanRows.forEach((r) => {
+      if (!basketSizeMap.has(r.TransactionID)) basketSizeMap.set(r.TransactionID, new Set());
+      basketSizeMap.get(r.TransactionID).add(r.Product);
+    });
+    const sizes = Array.from(basketSizeMap.values()).map((s) => s.size);
+    const sizeDesc = describe(sizes);
+    document.getElementById("basket-summary").innerHTML = tableHTML(
+      ["Statistic", "Basket Size"],
+      Object.keys(sizeDesc).map((k) => [k, fmt2(sizeDesc[k])])
+    );
+
+    const freqRows = popularityList.map((p) => [p.product, p.count]);
+    document.getElementById("freq-table").innerHTML = tableHTML(["Product", "Frequency"], freqRows);
+  }
+
+  // ============================================================
+  // RENDER: FREQUENT ITEMSETS PAGE
+  // ============================================================
+  function renderItemsetsPage() {
+    document.getElementById("itemsets-sub").textContent =
+      `Itemsets that appear together in at least ${(minSupport * 100).toFixed(1)}% of all transactions (current minimum support).`;
+    const msgEl = document.getElementById("itemsets-msg");
+    if (frequentItemsets.length === 0) {
+      msgEl.innerHTML = `<div class="callout warn">No frequent itemsets found at this support threshold. Try lowering "Minimum Support" in the sidebar.</div>`;
+      document.getElementById("itemsets-table").innerHTML = "";
+      document.getElementById("itemsets-count").textContent = "";
+      return;
+    }
+    msgEl.innerHTML = "";
+    const rows = frequentItemsets.map((fi) => [fi.items.join(", "), fmt3(fi.support), fi.items.length]);
+    document.getElementById("itemsets-table").innerHTML = tableHTML(["Product combination", "Support", "Itemset size"], rows);
+    document.getElementById("itemsets-count").innerHTML = `<span><b>${frequentItemsets.length}</b> total frequent itemsets found</span>`;
+  }
+
+  // ============================================================
+  // RENDER: ASSOCIATION RULES PAGE
+  // ============================================================
+  function renderRulesPage() {
+    const msgEl = document.getElementById("rules-msg");
+    if (rules.length === 0) {
+      msgEl.innerHTML = `<div class="callout warn">No association rules found at the current Support / Confidence / Lift thresholds. Try lowering them in the sidebar.</div>`;
+      document.getElementById("rules-table").innerHTML = "";
+      document.getElementById("rules-plain").innerHTML = "";
+      return;
+    }
+    msgEl.innerHTML = "";
+    const rows = rules.map((r) => [r.antecedents.join(", "), r.consequents.join(", "), fmt3(r.support), fmt3(r.confidence), fmt3(r.lift)]);
+    document.getElementById("rules-table").innerHTML = tableHTML(
+      ["Antecedent (if bought)", "Consequent (then likely buy)", "Support", "Confidence", "Lift"], rows
+    );
+
+    document.getElementById("rules-plain").innerHTML = rules.slice(0, 5).map((r) =>
+      `<div class="rule-line">Customers who buy <b>${r.antecedents.join(", ")}</b> are likely to also buy <b>${r.consequents.join(", ")}</b>
+       &nbsp; <span class="mono" style="color:var(--muted)">(Support=${fmt3(r.support)}, Confidence=${fmt2(r.confidence)}, Lift=${fmt2(r.lift)})</span></div>`
+    ).join("");
+
+    document.getElementById("dl-rules").onclick = () =>
+      csvDownload("association_rules.csv", ["Antecedent", "Consequent", "Support", "Confidence", "Lift"],
+        rules.map((r) => [r.antecedents.join(" & "), r.consequents.join(" & "), r.support, r.confidence, r.lift]));
+  }
+
+  // ============================================================
+  // RENDER: PRODUCT RECOMMENDATIONS PAGE
+  // ============================================================
+  const allProducts = Array.from(new Set(cleanRows.map((r) => r.Product))).sort();
+
+  function populateProductSelect() {
+    const sel = document.getElementById("product-select");
+    sel.innerHTML = allProducts.map((p) => `<option value="${p}">${p}</option>`).join("");
+  }
+
+  function renderRecommendationsFor(product) {
+    const msgEl = document.getElementById("recs-msg");
+    const panel = document.getElementById("recs-panel");
+    const chartPanel = document.getElementById("recs-chart-panel");
+
+    if (!product || allProducts.indexOf(product) === -1) {
+      msgEl.innerHTML = `<div class="callout error">Invalid product selection. Please choose a product from the dropdown list.</div>`;
+      panel.style.display = "none"; chartPanel.style.display = "none";
+      return;
+    }
+    const recs = getRecommendations(rules, product, priceLookup, 10);
+    if (recs.length === 0) {
+      msgEl.innerHTML = `<div class="callout info">No strong association rules were found for <b>${product}</b> at the current thresholds. Try lowering Minimum Support / Confidence in the sidebar, or pick a more frequently purchased product.</div>`;
+      panel.style.display = "none"; chartPanel.style.display = "none";
+      return;
+    }
+    msgEl.innerHTML = `<div class="callout ok">Found ${recs.length} recommendation(s) for customers buying <b>${product}</b>.</div>`;
+    panel.style.display = "block"; chartPanel.style.display = "block";
+
+    document.getElementById("recs-cards").innerHTML = recs.map((r) => `
+      <div class="rec-card ${r.type === "Upsell" ? "up" : ""}">
+        <div>
+          <span class="rec-name">${r.product}</span>
+          <span class="badge ${r.type === "Upsell" ? "up" : "cross"}">${r.type}</span>
+        </div>
+        <div class="rec-stats">Support ${fmt3(r.support)} &nbsp;·&nbsp; Confidence ${fmt2(r.confidence)} &nbsp;·&nbsp; Lift ${fmt2(r.lift)} &nbsp;·&nbsp; Approx. price ${money(r.price)}</div>
+      </div>`).join("");
+
+    document.getElementById("recs-table").innerHTML = tableHTML(
+      ["Recommended product", "Support", "Confidence", "Lift", "Recommendation type", "Approx. price"],
+      recs.map((r) => [r.product, fmt3(r.support), fmt3(r.confidence), fmt3(r.lift), r.type, money(r.price)])
+    );
+
+    document.getElementById("recs-chart-title").textContent = `Recommendation strength (lift) for "${product}"`;
+    drawBarChart("chart-recs", recs.map((r) => r.product), recs.map((r) => r.lift),
+      recs.map((r) => (r.type === "Upsell" ? "#B8842A" : "#2F855A")), "Lift", true);
+  }
+
+  // ============================================================
+  // CHART HELPERS (Chart.js)
+  // ============================================================
+  const CHART_LIB_OK = typeof Chart !== "undefined";
+  function chartFallback(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || canvas.dataset.fallbackShown) return;
+    canvas.dataset.fallbackShown = "1";
+    const note = document.createElement("div");
+    note.className = "callout warn";
+    note.textContent = "Charts need an internet connection to load the Chart.js library from a CDN. All data, tables and recommendations above still work fully offline.";
+    canvas.replaceWith(note);
+  }
+
+  function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+  function drawBarChart(canvasId, labels, values, color, axisLabel, horizontal) {
+    if (!CHART_LIB_OK) { chartFallback(canvasId); return; }
+    destroyChart(canvasId);
+    const ctx = document.getElementById(canvasId).getContext("2d");
+    charts[canvasId] = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets: [{ label: axisLabel, data: values, backgroundColor: color, borderRadius: 4 }] },
+      options: {
+        indexAxis: horizontal ? "y" : "x",
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { grid: { display: !horizontal } }, y: { grid: { display: horizontal } } },
+      },
+    });
+  }
+
+  function drawPieChart(canvasId, labels, values) {
+    if (!CHART_LIB_OK) { chartFallback(canvasId); return; }
+    destroyChart(canvasId);
+    const palette = ["#2D6A4F","#40916C","#74C69D","#B8842A","#E0A458","#1B4332","#95D5B2","#6F9C86","#C9972B","#52796F","#84A98C","#354F52","#D8B26E","#A3B18A","#588157"];
+    const ctx = document.getElementById(canvasId).getContext("2d");
+    charts[canvasId] = new Chart(ctx, {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: values, backgroundColor: palette }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: "right", labels: { boxWidth: 12, font: { size: 11 } } } } },
+    });
+  }
+
+  function drawScatterChart(canvasId, points) {
+    if (!CHART_LIB_OK) { chartFallback(canvasId); return; }
+    destroyChart(canvasId);
+    const ctx = document.getElementById(canvasId).getContext("2d");
+    charts[canvasId] = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "Rules",
+          data: points.map((p) => ({ x: p.support, y: p.confidence, lift: p.lift, label: p.label })),
+          backgroundColor: "#2D6A4F",
+          pointRadius: points.map((p) => Math.min(4 + p.lift * 1.6, 16)),
+        }],
+      },
+      options: {
+        maintainAspectRatio: false,
+        scales: { x: { title: { display: true, text: "Support" } }, y: { title: { display: true, text: "Confidence" } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.raw.label}  (lift ${ctx.raw.lift.toFixed(2)})` } },
+        },
+      },
+    });
+  }
+
+  // ============================================================
+  // RENDER: VISUALIZATIONS PAGE
+  // ============================================================
+  function renderVizPage() {
+    const topSelling = popularityList.slice().sort((a, b) => (qtyByProduct[b.product] || 0) - (qtyByProduct[a.product] || 0)).slice(0, 15);
+    drawBarChart("chart-top-selling", topSelling.map((p) => p.product), topSelling.map((p) => qtyByProduct[p.product] || 0), "#2D6A4F", "Units sold", false);
+
+    const top15freq = popularityList.slice(0, 15);
+    drawPieChart("chart-freq-pie", top15freq.map((p) => p.product), top15freq.map((p) => p.count));
+
+    const rulesMsg = document.getElementById("viz-rules-msg");
+    if (rules.length === 0) {
+      rulesMsg.innerHTML = `<div class="callout warn">No rules available to plot at current thresholds.</div>`;
+      destroyChart("chart-support-conf"); destroyChart("chart-top-rules");
+    } else {
+      rulesMsg.innerHTML = "";
+      drawScatterChart("chart-support-conf", rules.map((r) => ({
+        support: r.support, confidence: r.confidence, lift: r.lift,
+        label: `${r.antecedents.join(",")} → ${r.consequents.join(",")}`,
+      })));
+
+      const topRules = rules.slice(0, 15);
+      drawBarChart("chart-top-rules",
+        topRules.map((r) => `${r.antecedents.join(",")} → ${r.consequents.join(",")}`),
+        topRules.map((r) => r.lift), "#B8842A", "Lift", true);
+    }
+
+    const sampleMsg = document.getElementById("viz-sample-msg");
+    if (rules.length > 0 && popularityList.length > 0) {
+      const sampleProduct = popularityList[0].product;
+      const sampleRecs = getRecommendations(rules, sampleProduct, priceLookup, 8);
+      if (sampleRecs.length > 0) {
+        sampleMsg.innerHTML = `<div class="callout info">Example: recommendations generated for the most popular product — <b>${sampleProduct}</b>.</div>`;
+        drawBarChart("chart-sample-rec", sampleRecs.map((r) => r.product), sampleRecs.map((r) => r.confidence),
+          sampleRecs.map((r) => (r.type === "Upsell" ? "#B8842A" : "#2F855A")), "Confidence", false);
+      } else {
+        sampleMsg.innerHTML = `<div class="callout info">No recommendations available for the sample product at current thresholds.</div>`;
+        destroyChart("chart-sample-rec");
+      }
+    } else {
+      sampleMsg.innerHTML = `<div class="callout info">No association rules available to generate a sample recommendation chart.</div>`;
+      destroyChart("chart-sample-rec");
+    }
+  }
+
+  // ============================================================
+  // RENDER: HOME PAGE
+  // ============================================================
+  function renderHomePage() {
+    document.getElementById("m-txn").textContent = basketMap.size.toLocaleString();
+    document.getElementById("m-prod").textContent = allProducts.length.toLocaleString();
+    const custSet = new Set(cleanRows.map((r) => r.CustomerID));
+    document.getElementById("m-cust").textContent = custSet.size.toLocaleString();
+    document.getElementById("m-rules").textContent = rules.length.toLocaleString();
+
+    const top10 = popularityList.slice(0, 10);
+    drawBarChart("chart-home-top", top10.map((p) => p.product), top10.map((p) => p.count), "#2D6A4F", "Transactions", true);
+
+    const previewEl = document.getElementById("home-preview");
+    if (rules.length === 0) {
+      previewEl.innerHTML = `<div class="callout warn">No association rules found yet at the current thresholds. Try lowering Minimum Support / Confidence in the sidebar.</div>`;
+    } else {
+      const preview = rules.slice(0, 5);
+      previewEl.innerHTML = "<table>" + tableHTML(
+        ["If customer buys...", "...recommend", "Support", "Confidence", "Lift"],
+        preview.map((r) => [r.antecedents.join(", "), r.consequents.join(", "), fmt3(r.support), fmt2(r.confidence), fmt2(r.lift)])
+      ) + "</table>";
+    }
+  }
+
+  // ============================================================
+  // MASTER RENDER
+  // ============================================================
+  function renderAll() {
+    renderHomePage();
+    renderItemsetsPage();
+    renderRulesPage();
+    renderVizPage();
+    const sel = document.getElementById("product-select");
+    renderRecommendationsFor(sel.value);
+  }
+
+  document.getElementById("product-select").addEventListener("change", (e) => renderRecommendationsFor(e.target.value));
+
+  // ---------- Initial boot ----------
+  renderDatasetPage();
+  renderAnalysisPage();
+  populateProductSelect();
+  recompute(); // runs apriori + rules for the first time and renders everything
+})();
+</script>
+</body>
+</html>
